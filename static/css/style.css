@@ -1,0 +1,45 @@
+/* static/css/style.css */
+
+/* Add some spacing and improve readability */
+body {
+    background-color: #f8f9fa;
+}
+
+.card {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+}
+
+.badge {
+    margin-right: 4px;
+}
+
+/* Make debug section less prominent */
+details {
+    color: #6c757d;
+    font-size: 0.9em;
+}
+
+details summary {
+    cursor: pointer;
+    user-select: none;
+}
+
+details summary:hover {
+    color: #495057;
+}
+
+/* Improve button spacing */
+.btn {
+    margin-right: 5px;
+}
+
+/* Make the navbar Atlassian blue */
+.navbar.bg-primary {
+    background-color: #0052CC !important;
+}

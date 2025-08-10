@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+
+{% block title %}Select Space - Confluence Organizer{% endblock %}
+
+{% block content %}
+<h1>Select a Space</h1>
+<p>Choose a Confluence space to analyze and organize:</p>
+
+<div class="row mt-4">
+    {% for space in spaces %}
+    <div class="col-md-4 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ space[1] }}</h5>
+                <p class="card-text">
+                    <small class="text-muted">Key: {{ space[0] }}</small><br>
+                    {% if space[2] %}
+                    <small class="text-muted">Last indexed: {{ space[2] }}</small>
+                    {% endif %}
+                </p>
+                <a href="{{ url_for('view_space', space_key=space[0]) }}" class="btn btn-primary">View Clusters</a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not spaces %}
+<div class="alert alert-info">
+    No spaces found in cache. The system will fetch them from Confluence on first access.
+</div>
+{% endif %}
+{% endblock %}

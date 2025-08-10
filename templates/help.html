@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Help - Confluence Organizer{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Spaces</a></li>
+        <li class="breadcrumb-item active">Help</li>
+    </ol>
+</nav>
+
+<h1>Confluence Organizer Help</h1>
+
+<div class="row">
+    <div class="col-md-3">
+        <!-- Table of Contents -->
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-body">
+                <h6>Quick Links</h6>
+                <nav class="nav flex-column">
+                    <a class="nav-link" href="#overview">Overview</a>
+                    <a class="nav-link" href="#concepts">Key Concepts</a>
+                    <a class="nav-link" href="#workflow">Workflow</a>
+                    <a class="nav-link" href="#suggestions">Understanding Suggestions</a>
+                    <a class="nav-link" href="#troubleshooting">Troubleshooting</a>
+                    <a class="nav-link" href="#faq">FAQ</a>
+                </nav>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-9">
+        <section id="overview" class="mb-5">
+            <h2>Overview</h2>
+            <p>The Confluence Organizer helps you maintain consistent labeling across your Confluence spaces by:</p>
+            <ul>
+                <li>Identifying directory pages (clusters) marked with the <code>{{ config.analysis.cluster_label }}</code> label</li>
+                <li>Finding all child pages under each directory</li>
+                <li>Suggesting appropriate labels based on the directory's labels</li>
+                <li>Applying labels in bulk with one click</li>
+            </ul>
+        </section>
+
+        <section id="concepts" class="mb-5">
+            <h2>Key Concepts</h2>
+            
+            <h4>Clusters/Directories</h4>
+            <p>A cluster is a Confluence page that:</p>
+            <ul>
+                <li>Has the <code>{{ config.analysis.cluster_label }}</code> label</li>
+                <li>Acts as a parent/directory for related pages</li>
+                <li>Contains child pages that should share similar labels</li>
+            </ul>
+            
+            <h4>Cluster Membership</h4>
+            <p>A page belongs to a cluster if it is a <strong>direct child</strong> of the directory page in the Confluence page hierarchy.</p>
+            <div class="alert alert-info">
+                <strong>Note:</strong> Pages can have labels from multiple topics, but they belong to only ONE cluster (wherever they sit in the hierarchy).
+            </div>
+            
+            <h4>Label Suggestions</h4>
+            <p>Currently, the system suggests labels by comparing what the directory has vs. what each child page has. In the future, AI will analyze page content for smarter suggestions.</p>
+        </section>
+
+        <section id="workflow" class="mb-5">
+            <h2>Typical Workflow</h2>
+            <ol>
+                <li><strong>Select a Space:</strong> Choose which Confluence space to organize</li>
+                <li><strong>View Clusters:</strong> See all directory pages in the space</li>
+                <li><strong>Select a Cluster:</strong> Click on a cluster to see its members and suggestions</li>
+                <li><strong>Generate Suggestions:</strong> Click "Generate Suggestions" if none exist</li>
+                <li><strong>Review Suggestions:</strong> 
+                    <ul>
+                        <li>High confidence (≥70%) suggestions are pre-selected</li>
+                        <li>Click page names to view them in Confluence</li>
+                        <li>Uncheck any suggestions you don't want</li>
+                    </ul>
+                </li>
+                <li><strong>Apply Labels:</strong> Click "Apply Selected Suggestions" to add labels to Confluence</li>
+            </ol>
+        </section>
+
+        <section id="suggestions" class="mb-5">
+            <h2>Understanding Suggestions</h2>
+            
+            <h4>Confidence Scores</h4>
+            <table class="table">
+                <tr>
+                    <td><span class="badge bg-success">80-100%</span></td>
+                    <td>High confidence - Usually safe to apply</td>
+                </tr>
+                <tr>
+                    <td><span class="badge bg-warning">60-79%</span></td>
+                    <td>Medium confidence - Review before applying</td>
+                </tr>
+                <tr>
+                    <td><span class="badge bg-danger">Below 60%</span></td>
+                    <td>Low confidence - Careful review needed</td>
+                </tr>
+            </table>
+            
+            <h4>"No suggestions found"</h4>
+            <p>This message appears when:</p>
+            <ul>
+                <li>All pages already have appropriate labels</li>
+                <li>No suggestions have been generated yet for this cluster</li>
+                <li>The suggestion generation found no missing labels</li>
+            </ul>
+        </section>
+
+        <section id="troubleshooting" class="mb-5">
+            <h2>Troubleshooting</h2>
+            
+            <div class="mb-3">
+                <h5>No clusters found in my space</h5>
+                <p>Make sure your directory pages have the <code>{{ config.analysis.cluster_label }}</code> label. Then click "Reindex Space" to refresh the data.</p>
+            </div>
+            
+            <div class="mb-3">
+                <h5>Missing pages in a cluster</h5>
+                <p>Only direct children are included. Check that pages are directly under the directory page in the Confluence hierarchy (not grandchildren or elsewhere).</p>
+            </div>
+            
+            <div class="mb-3">
+                <h5>Labels not appearing after applying</h5>
+                <p>Check if:</p>
+                <ul>
+                    <li>You have permission to edit the pages</li>
+                    <li>The Confluence API token has write access</li>
+                    <li>The pages weren't moved or deleted</li>
+                </ul>
+            </div>
+            
+            <div class="mb-3">
+                <h5>Need to refresh data</h5>
+                <p>Click "Reindex Space" on the space page to fetch fresh data from Confluence.</p>
+            </div>
+        </section>
+
+        <section id="faq" class="mb-5">
+            <h2>Frequently Asked Questions</h2>
+            
+            <div class="mb-3">
+                <h5>Q: Can a page belong to multiple clusters?</h5>
+                <p>A: No. A page belongs to exactly one cluster - the directory it sits under hierarchically. However, it can have labels from multiple topics.</p>
+            </div>
+            
+            <div class="mb-3">
+                <h5>Q: What happens to applied suggestions?</h5>
+                <p>A: They're marked as "applied" and removed from the suggestion list to prevent duplicate applications.</p>
+            </div>
+            
+            <div class="mb-3">
+                <h5>Q: Can I undo applied labels?</h5>
+                <p>A: Not through this tool. You'll need to remove them manually in Confluence.</p>
+            </div>
+            
+            <div class="mb-3">
+                <h5>Q: How often should I reindex?</h5>
+                <p>A: Only when you've made structural changes in Confluence (added pages, moved pages, changed labels on directories).</p>
+            </div>
+            
+            <div class="mb-3">
+                <h5>Q: Is my data cached?</h5>
+                <p>A: Yes, to reduce API calls. Use "Reindex Space" to refresh the cache.</p>
+            </div>
+        </section>
+
+        <div class="alert alert-secondary mt-5">
+            <strong>Configuration:</strong> This instance looks for clusters with the <code>{{ config.analysis.cluster_label }}</code> label.
+            To change this, update the config.yaml file.
+        </div>
+    </div>
+</div>
+{% endblock %}

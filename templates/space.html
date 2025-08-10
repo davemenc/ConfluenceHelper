@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+
+{% block title %}{{ space_key }} - Clusters{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/">Spaces</a></li>
+        <li class="breadcrumb-item active">{{ space_key }}</li>
+    </ol>
+</nav>
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>Clusters in {{ space_key }}</h1>
+    <a href="{{ url_for('reindex_space', space_key=space_key) }}" class="btn btn-outline-secondary">
+        🔄 Reindex Space
+    </a>
+</div>
+
+{% if clusters %}
+<div class="row">
+    {% for cluster in clusters %}
+    <div class="col-md-6 mb-3">
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">{{ cluster.title }}</h5>
+                <p class="card-text">
+                    <strong>Page ID:</strong> {{ cluster.id }}<br>
+                    <strong>Labels:</strong> 
+                    {% for label in cluster.labels %}
+                        <span class="badge bg-secondary">{{ label }}</span>
+                    {% endfor %}
+                </p>
+                <a href="{{ url_for('view_cluster', cluster_id=cluster.id) }}" class="btn btn-primary">
+                    View & Generate Suggestions
+                </a>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="alert alert-info mt-4">
+    Found {{ clusters|length }} cluster(s) with the "{{ cluster_label }}" label.
+</div>
+{% else %}
+<div class="alert alert-warning">
+    No clusters found in this space. 
+    <br><br>
+    Clusters are identified by pages with the <code>{{ cluster_label }}</code> label.
+    <br><br>
+    Make sure your directory pages have this label, then click "Reindex Space" above.
+</div>
+{% endif %}
+
+<!-- Debug section - remove in production -->
+<details class="mt-5">
+    <summary>Debug Info (click to expand)</summary>
+    <div class="card mt-2">
+        <div class="card-body">
+            <p>Space Key: {{ space_key }}</p>
+            <p>Number of clusters found: {{ clusters|length }}</p>
+            {% if clusters %}
+            <p>Cluster IDs: {% for c in clusters %}{{ c.id }}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+            {% endif %}
+        </div>
+    </div>
+</details>
+{% endblock %}
