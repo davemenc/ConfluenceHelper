@@ -11,7 +11,15 @@
     </ol>
 </nav>
 
-<h1>Cluster: {{ cluster_title }}</h1>
+<h1>
+    Cluster: 
+    <a href="{{ config['confluence']['url'] }}/wiki/spaces/{{ space_key }}/pages/{{ cluster_id }}" 
+       target="_blank"
+       title="Open directory page in Confluence">
+        {{ cluster_title }}
+        <small>🔗</small>
+    </a>
+</h1>
 <p class="text-muted">Analyzing pages and generating label suggestions</p>
 
 <div class="card mb-4">
