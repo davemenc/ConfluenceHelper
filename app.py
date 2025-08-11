@@ -10,6 +10,23 @@ from integrations.db_manager import DatabaseManager
 from core.analyzer import ClusterAnalyzer
 from core.suggester import SuggestionEngine
 
+import logging
+
+# Set up logging to file
+logging.basicConfig(
+    level=logging.DEBUG,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('debug.log'),
+        logging.StreamHandler()  # Also print to console
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# Then in generate_suggestions, replace print statements with:
+# logger.info("message here")
+# For example:
+# logger.info(f"Starting suggestion generation for cluster {cluster_id}")
 app = Flask(__name__)
 
 # Load configuration
@@ -75,7 +92,8 @@ def view_space(space_key):
     return render_template('space.html', 
                          space_key=space_key, 
                          clusters=clusters,
-                         cluster_label=config['analysis']['cluster_label'])
+                         cluster_label=config['analysis']['cluster_label'],
+                         config=config)
 
 @app.route('/space/<space_key>/reindex')
 def reindex_space(space_key):
@@ -132,23 +150,33 @@ def view_cluster(cluster_id):
     
     # Get existing suggestions from database
     suggestions = db.execute_query(
-        """SELECT s.id, s.page_id, p.title, s.suggestion_text, s.confidence_score, s.status
+        """SELECT s.id, s.page_id, p.title, s.suggestion_text, s.confidence_score, s.status, s.created_date
            FROM suggestions s
            JOIN pages p ON s.page_id = p.id
-           WHERE s.cluster_id = ? AND s.status = 'pending'""",
+           WHERE s.cluster_id = ? AND s.status = 'pending'
+           ORDER BY p.title,s.confidence_score DESC""",
         (cluster_id,)
     )
     
     # Format suggestions for template
     formatted_suggestions = []
-    for sug_id, page_id, page_title, label, confidence, status in suggestions:
+    for sug_id, page_id, page_title, label, confidence, status, created_date in suggestions:
+        # Try to get a reason from the created_date field (we'll improve this later)
+        reason = f"Based on AI analysis of page content"
+        if confidence >= 0.8:
+            reason = "High relevance to page content"
+        elif confidence >= 0.6:
+            reason = "Moderate relevance to page content"
+        else:
+            reason = "Possible relevance to page content"
+            
         formatted_suggestions.append({
             'id': sug_id,
             'page_id': page_id,
             'page_title': page_title,
             'label': label,
             'confidence': confidence,
-            'reason': 'Based on content analysis'  # We'll improve this later
+            'reason': reason
         })
     
     return render_template('cluster.html',
@@ -160,74 +188,171 @@ def view_cluster(cluster_id):
                          suggestions=formatted_suggestions,
                          config=config)
 
+""" START GENERATE SUGGESTIONS"""
 @app.route('/cluster/<cluster_id>/generate-suggestions')
 def generate_suggestions(cluster_id):
-    """Generate new suggestions for a cluster"""
+    """Generate new suggestions for a cluster using Claude"""
+    print("\n" + "="*60)
+    print("GENERATE_SUGGESTIONS FUNCTION CALLED!")
+    print(f"Cluster ID: {cluster_id}")
+    print("="*60)
+    
     space_key = request.args.get('space_key')
+    print(f"Space key: {space_key}")
     
     # Clear old suggestions
+    print("Clearing old suggestions...")
     db.execute_query(
         "DELETE FROM suggestions WHERE cluster_id = ?",
         (cluster_id,)
     )
+    print("Old suggestions cleared")
     
     # Get cluster info
+    print(f"Fetching cluster info for ID: {cluster_id}")
     cluster_page = db.execute_query(
-        "SELECT labels_json FROM pages WHERE id = ?",
+        "SELECT title, labels_json FROM pages WHERE id = ?",
         (cluster_id,)
     )
+    print(f"Cluster query returned: {len(cluster_page)} results")
     
     if not cluster_page:
+        print("ERROR: Cluster not found in database!")
         flash('Cluster not found')
         return redirect(url_for('view_space', space_key=space_key))
     
-    import json
-    cluster_labels = json.loads(cluster_page[0][0]) if cluster_page[0][0] else []
-    directory_labels = [l for l in cluster_labels if l != config['analysis']['cluster_label']]
+    cluster_title, cluster_labels_json = cluster_page[0]
+    cluster_labels = json.loads(cluster_labels_json) if cluster_labels_json else []
+    print(f"Cluster title: {cluster_title}")
+    print(f"Cluster labels: {cluster_labels}")
     
-    # Get member pages
-    all_pages = db.execute_query(
-        "SELECT id, title, parent_id, labels_json FROM pages WHERE space_key = ?",
+    # Get all labels used in the space (for consistency)
+    print("Getting all labels in space...")
+    all_pages_in_space = db.execute_query(
+        "SELECT labels_json FROM pages WHERE space_key = ?",
         (space_key,)
     )
     
-    member_pages = []
-    for page_id, title, parent_id, page_labels_json in all_pages:
-        if page_id == cluster_id:
-            continue
-            
+    all_labels = set()
+    for labels_json, in all_pages_in_space:
+        if labels_json:
+            labels = json.loads(labels_json)
+            all_labels.update(labels)
+    
+    all_labels_list = sorted(list(all_labels))
+    print(f"Found {len(all_labels_list)} unique labels in space")
+    
+    # Get member pages (direct children only)
+    print("Getting member pages...")
+    member_pages = db.execute_query(
+        "SELECT id, title, parent_id, labels_json FROM pages WHERE space_key = ? AND parent_id = ?",
+        (space_key, cluster_id)
+    )
+    print(f"Found {len(member_pages)} member pages")
+    
+    if len(member_pages) == 0:
+        print("WARNING: No member pages found!")
+        flash('No pages found in this cluster', 'warning')
+        return redirect(url_for('view_cluster', cluster_id=cluster_id))
+    
+    # Check if Claude API key is configured
+    claude_key = config.get('claude', {}).get('api_key', '')
+    if not claude_key or claude_key == 'your-claude-api-key-here':
+        print("ERROR: Claude API key not configured or still has placeholder value!")
+        flash('Claude API key not configured. Please add it to config.yaml', 'error')
+        return redirect(url_for('view_cluster', cluster_id=cluster_id))
+    
+    print(f"Claude API key found: {claude_key[:10]}...")
+    
+    # Prepare cluster info for AI
+    cluster_info = {
+        'title': cluster_title,
+        'labels': [l for l in cluster_labels if l != config['analysis']['cluster_label']]
+    }
+    
+    suggestions_generated = 0
+    pages_processed = 0
+    errors = []
+    
+    print(f"\nStarting to process pages ...")
+    
+    for page_id, title, parent_id, page_labels_json in member_pages:  # Process all pages
+        pages_processed += 1
         page_labels = json.loads(page_labels_json) if page_labels_json else []
+        print(f"\n--- Processing page {pages_processed}/{ len(member_pages)}: {title}")
+        print(f"    Page ID: {page_id}")
+        print(f"    Current labels: {page_labels}")
         
-        # Check if page is a child of the directory
-        is_child = (parent_id == cluster_id)
-        
-        # Check if page shares any labels with the directory
-        shares_labels = any(label in page_labels for label in directory_labels)
-        
-        # Include page if it's either a child OR shares labels
-        if is_child or shares_labels:
-            member_pages.append({
+        # Fetch full page content for AI analysis
+        try:
+            print(f"    Fetching content from Confluence...")
+            page_content = confluence.get_page_content(page_id)
+            content_length = len(page_content.get('content', ''))
+            print(f"    Got {content_length} characters of content")
+            
+            if content_length == 0:
+                print(f"    WARNING: No content found for this page!")
+                continue
+            
+            # Prepare page data for AI
+            page_data = {
                 'id': page_id,
                 'title': title,
+                'content': page_content.get('content', ''),
                 'labels': page_labels
-            })
-    
-    # For now, let's create some simple suggestions
-    # (We'll integrate Claude properly later)
-    for page in member_pages:
-        # Simple rule: suggest directory labels that the page doesn't have
-        for label in directory_labels:
-            if label not in page['labels']:
+            }
+            
+            # Get AI suggestions
+            print(f"    Calling Claude for suggestions...")
+            print(f"    Using suggester: {suggester}")
+            
+            suggestions = suggester.generate_label_suggestions(
+                page_data, 
+                all_labels_list, 
+                cluster_info
+            )
+            
+            print(f"    Claude returned {len(suggestions)} suggestions:")
+            for s in suggestions:
+                print(f"      - {s['label']} (confidence: {s['confidence']})")
+            
+            # Store suggestions in database
+            for suggestion in suggestions:
+                print(f"    Storing suggestion: {suggestion['label']}")
                 db.execute_query(
                     """INSERT INTO suggestions 
                        (cluster_id, page_id, type, suggestion_text, confidence_score, status, created_date) 
                        VALUES (?, ?, ?, ?, ?, ?, datetime('now'))""",
-                    (cluster_id, page['id'], 'label', label, 0.75, 'pending')
+                    (cluster_id, page_id, 'label', suggestion['label'], suggestion['confidence'], 'pending')
                 )
+                suggestions_generated += 1
+                
+        except Exception as e:
+            error_msg = f"ERROR processing page {title}: {str(e)}"
+            print(f"    {error_msg}")
+            print(f"    Exception type: {type(e)}")
+            import traceback
+            print(f"    Traceback: {traceback.format_exc()}")
+            errors.append(error_msg)
     
-    flash(f'Generated suggestions for {len(member_pages)} pages')
+    print(f"\n{'='*60}")
+    print(f"SUMMARY: Generated {suggestions_generated} suggestions for {pages_processed} pages")
+    print(f"Errors: {len(errors)}")
+    print(f"{'='*60}\n")
+    
+    if errors:
+        for error in errors[:3]:  # Show first 3 errors
+            flash(error, 'warning')
+    
+    if suggestions_generated > 0:
+        flash(f'Generated {suggestions_generated} AI-powered suggestions for {pages_processed} pages ', 'success')
+    else:
+        flash(f'No suggestions generated. Check console for debug output. Processed {pages_processed} pages.', 'warning')
+    
     return redirect(url_for('view_cluster', cluster_id=cluster_id))
 
+
+""" END  GENERATE SUGGESTIONS"""
 @app.route('/apply-suggestions', methods=['POST'])
 def apply_suggestions():
     """Apply selected suggestions"""

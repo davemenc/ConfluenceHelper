@@ -23,7 +23,14 @@
     <div class="col-md-6 mb-3">
         <div class="card">
             <div class="card-body">
-                <h5 class="card-title">{{ cluster.title }}</h5>
+                <h5 class="card-title">
+                    <a href="{{ config['confluence']['url'] }}/wiki/spaces/{{ space_key }}/pages/{{ cluster.id }}" 
+                       target="_blank"
+                       title="Open in Confluence">
+                        {{ cluster.title }}
+                        <small>🔗</small>
+                    </a>
+                </h5>
                 <p class="card-text">
                     <strong>Page ID:</strong> {{ cluster.id }}<br>
                     <strong>Labels:</strong> 
